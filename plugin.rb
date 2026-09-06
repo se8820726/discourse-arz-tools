@@ -8,6 +8,7 @@
 # required_version: 3.3.0
 
 enabled_site_setting :discourse_arz_tools_enabled
+register_asset "javascripts/discourse/initializers/arz-sso.js"
 
 module ::DiscourseArzTools
   PLUGIN_NAME = "discourse-arz-tools"
@@ -15,12 +16,17 @@ end
 
 after_initialize do
   require_relative "app/controllers/discourse_arz_tools_topic_views_controller"
+  require_relative "app/controllers/discourse_arz_tools_sso_controller"
   require_relative "lib/discourse_arz_tools/webview_auth/idp_client"
   require_relative "lib/discourse_arz_tools/webview_auth/identity_resolver"
   require_relative "lib/discourse_arz_tools/webview_auth/request_authenticator"
 
   Discourse::Application.routes.append do
     post "/discourse-arz-tools/topic-view" => "discourse_arz_tools_topic_views#create"
+    get "/discourse-arz-tools/sso-bridge" => "discourse_arz_tools_sso#bridge"
+    get "/discourse-arz-tools/sso-bootstrap" => "discourse_arz_tools_sso#bootstrap"
+    post "/discourse-arz-tools/sso-session" => "discourse_arz_tools_sso#create_session"
+    post "/discourse-arz-tools/sso-logout" => "discourse_arz_tools_sso#destroy_session"
   end
 
   if defined?(::Chat::Engine)

@@ -8,6 +8,12 @@ require "uri"
 module ::DiscourseArzTools
   module WebviewAuth
     class IdpClient
+      def self.signature_for(access_token)
+        secret = SiteSetting.discourse_connect_secret.to_s
+        return nil if secret.blank? || access_token.blank?
+        OpenSSL::HMAC.hexdigest("sha256", secret, access_token)
+      end
+
       def initialize(access_token)
         @access_token = access_token
       end
@@ -22,7 +28,7 @@ module ::DiscourseArzTools
 
         request = Net::HTTP::Get.new(uri)
         request["Authorization"] = "Bearer #{@access_token}"
-        request["X-Hub-Signature"] = OpenSSL::HMAC.hexdigest("sha256", secret, @access_token)
+        request["X-Hub-Signature"] = self.class.signature_for(@access_token)
 
         timeout = SiteSetting.discourse_arz_tools_webview_auth_timeout_seconds.to_i
         http = Net::HTTP.new(uri.host, uri.port, :ENV)

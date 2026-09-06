@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require "base64"
+require "json"
+
 module ::DiscourseArzTools
   module WebviewAuth
     class RequestAuthenticator
@@ -28,6 +31,17 @@ module ::DiscourseArzTools
         end
 
         def authenticate!(controller)
+          if controller.request.delete? && controller.request.path.match?(%r{\A/session(?:/|\z)})
+            controller.cookies[:arz_webview_logout] = {
+              value: "1",
+              expires: 1.minute.from_now,
+              path: "/discourse-arz-tools/sso-bootstrap",
+              secure: true,
+              same_site: :strict,
+            }
+            return
+          end
+
           return if !SiteSetting.discourse_arz_tools_enabled
           return if !SiteSetting.discourse_arz_tools_webview_auth_enabled
           return if !controller.request.get?
@@ -48,6 +62,7 @@ module ::DiscourseArzTools
           return if user.nil? || !user.active? || user.suspended?
 
           controller.log_on_user(user, replay_anonymous_action: true)
+          install_sync_bootstrap(controller, access_token)
         rescue StandardError => error
           Rails.logger.warn(
             "[discourse-arz-tools] WebView authentication failed: #{error.class}",
@@ -55,6 +70,24 @@ module ::DiscourseArzTools
         end
 
         private
+
+        def install_sync_bootstrap(controller, access_token)
+          signature = IdpClient.signature_for(access_token)
+          return if signature.blank?
+
+          payload = Base64.urlsafe_encode64(
+            JSON.generate(token: access_token, signature: signature),
+            padding: false,
+          )
+          controller.cookies[:arz_webview_sso] = {
+            value: payload,
+            expires: 1.minute.from_now,
+            path: "/discourse-arz-tools/sso-bootstrap",
+            secure: true,
+            same_site: :strict,
+          }
+          controller.response.headers["Cache-Control"] = "private, no-store"
+        end
 
         def bearer_token(authorization)
           match = authorization.to_s.match(/\ABearer\s+(.+)\z/)
